@@ -1,51 +1,38 @@
-const axios = require('axios');
-const cheerio = require('cheerio');
+import puppeteer from 'puppeteer';
 
-const SITE_NAME = 'oyuneks';
-const SITE_LOGO = 'https://oyuneks.com/themes/oyuneks/images/logo.png';
-const URL = 'https://oyuneks.com/knight-online-world/knight-online-goldbar-alis-satis';
+export default async function scrapeOyuneks() {
+    const browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
 
-async function scrapeOyuneks() {
-    try {
-        const { data } = await axios.get(URL);
-        const $ = cheerio.load(data);
+    const page = await browser.newPage();
+    await page.goto('https://oyuneks.com/knight-online-world/knight-online-goldbar-alis-satis', {
+        waitUntil: 'domcontentloaded',
+        timeout: 0
+    });
 
-        const products = [];
+    await page.waitForTimeout(3000);
 
-        $('.productVerticalList').each((i, el) => {
-            const name = $(el).find('.title a').text().trim();
+    const products = await page.evaluate(() => {
+        const items = [];
+        document.querySelectorAll('.productVerticalList').forEach(el => {
+            const name = el.querySelector('.title a')?.innerText?.trim();
+            const priceBuy = el.querySelector('.verticalButtonLeftBox .quantityPrice span')?.innerText?.replace('TL', '').replace(',', '.').trim();
+            const priceSell = el.querySelector('.verticalButtonRightBox .quantityPrice span')?.innerText?.replace('TL', '').replace(',', '.').trim();
 
-            const priceBuy = $(el)
-                .find('.verticalButtonLeftBox .quantityPrice span')
-                .first()
-                .text()
-                .trim()
-                .replace('TL', '')
-                .replace(',', '.');
-
-            const priceSell = $(el)
-                .find('.verticalButtonRightBox .quantityPrice span')
-                .first()
-                .text()
-                .trim()
-                .replace('TL', '')
-                .replace(',', '.');
-
-            products.push({
+            items.push({
                 name,
-                priceBuy: parseFloat(priceBuy),
-                priceSell: parseFloat(priceSell),
-                site: SITE_NAME,
-                logo: SITE_LOGO,
+                priceBuy: priceBuy ? parseFloat(priceBuy) : null,
+                priceSell: priceSell ? parseFloat(priceSell) : null,
+                site: 'oyuneks',
                 updatedAt: new Date().toISOString()
             });
         });
 
-        return products;
-    } catch (error) {
-        console.error(`Hata: ${SITE_NAME} verileri çekilemedi`, error.message);
-        return [];
-    }
-}
+        return items;
+    });
 
-module.exports = scrapeOyuneks;
+    await browser.close();
+    return products;
+}
